@@ -1,0 +1,93 @@
+import { describe, it, expect } from 'vitest';
+import { aggregate, prepareSeries } from '../src/domain/aggregate.js';
+import type { ForecastSample } from '../src/connectors/types.js';
+import type { TimeRangeDef } from '../src/domain/timeRanges.js';
+
+const REF = new Date('2026-07-19T06:00:00Z');
+
+const morning: TimeRangeDef = {
+  id: 2,
+  code: 'morning',
+  startMinute: 420,
+  endMinute: 780,
+  sortOrder: 1,
+};
+
+function s(time: string, params: ForecastSample['params']): ForecastSample {
+  return { validTime: new Date(time), referenceTime: REF, params };
+}
+
+// precipitation_mm values are per-hour (PT1H) accumulations.
+const samples: ForecastSample[] = [
+  s('2026-07-19T07:00:00Z', {
+    precipitation_mm: 1.0,
+    cloud_cover_pct: 80,
+    temperature_c: 15,
+    wind_speed_ms: 3,
+    wind_gust_ms: 8,
+    cape_jkg: 100,
+  }),
+  s('2026-07-19T09:00:00Z', {
+    precipitation_mm: 2.0,
+    cloud_cover_pct: 40,
+    temperature_c: 17,
+    wind_speed_ms: 5,
+    wind_gust_ms: 12,
+    cape_jkg: 500,
+  }),
+  s('2026-07-19T12:00:00Z', {
+    precipitation_mm: 0.5,
+    cloud_cover_pct: 60,
+    temperature_c: 19,
+    wind_speed_ms: 4,
+    wind_gust_ms: 10,
+    cape_jkg: 300,
+  }),
+  // afternoon step — must be excluded from the morning window
+  s('2026-07-19T14:00:00Z', {
+    precipitation_mm: 6.0,
+    cloud_cover_pct: 10,
+    temperature_c: 21,
+    wind_speed_ms: 6,
+    wind_gust_ms: 15,
+    cape_jkg: 900,
+  }),
+];
+
+describe('prepareSeries', () => {
+  it('keeps per-hour precipitation as an instantaneous (non-differenced) series', () => {
+    const prepared = prepareSeries(samples);
+    expect(prepared.deltas.precipitation_mm).toBeUndefined();
+    expect(prepared.instant.precipitation_mm!.map((p) => p.value)).toEqual([1.0, 2.0, 0.5, 6.0]);
+  });
+});
+
+describe('aggregateWindow', () => {
+  it('aggregates the morning window with correct methods', () => {
+    const agg = aggregate(samples, '2026-07-19', morning);
+    expect(agg).not.toBeNull();
+    expect(agg!.precipitationMm).toBeCloseTo(3.5); // sum(1.0, 2.0, 0.5)
+    expect(agg!.cloudCoverPct).toBeCloseTo(60); // mean(80,40,60)
+    expect(agg!.temperatureC).toBeCloseTo(17); // mean(15,17,19)
+    expect(agg!.windSpeedMs).toBeCloseTo(4); // mean(3,5,4)
+    expect(agg!.windGustMs).toBe(12); // max
+    expect(agg!.capeJkg).toBe(500); // max
+    expect(agg!.raw.stepCount).toBe(3);
+    expect(agg!.raw.temperatureMinC).toBe(15);
+    expect(agg!.raw.temperatureMaxC).toBe(19);
+  });
+
+  it('returns null when no step falls in the window (beyond horizon)', () => {
+    const agg = aggregate(samples, '2026-07-25', morning);
+    expect(agg).toBeNull();
+  });
+
+  it('keeps precipitation null when the param was never present', () => {
+    const noPrecip: ForecastSample[] = [
+      s('2026-07-19T08:00:00Z', { temperature_c: 16, cloud_cover_pct: 30 }),
+    ];
+    const agg = aggregate(noPrecip, '2026-07-19', morning);
+    expect(agg!.precipitationMm).toBeNull();
+    expect(agg!.temperatureC).toBe(16);
+  });
+});

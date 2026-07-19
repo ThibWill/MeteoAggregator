@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: meteo-db
+    environment:
+      POSTGRES_USER: meteo
+      POSTGRES_PASSWORD: meteo
+      POSTGRES_DB: meteo
+    ports:
+      - "5432:5432"
+    volumes:
+      - meteo-pgdata:/var/lib/postgresql/data
+    networks:
+      - meteo-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meteo -d meteo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Batch/CLI app. Kept under the "app" profile so `docker compose up -d`
+  # starts only the DB; run tasks on demand, e.g.
+  #   docker compose run --rm app npm run seed
+  #   docker compose run --rm app npm run daily
+  #   docker compose run --rm -e DB_INIT=1 -e DB_SEED=1 app npm run daily
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: meteo-aggregator:local
+    container_name: meteo-app
+    profiles: ["app"]
+    env_file:
+      - .env
+    environment:
+      # Override the .env host: inside the compose network the DB is `db`.
+      DATABASE_URL: postgresql://meteo:meteo@db:5432/meteo?schema=public
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - meteo-net
+    volumes:
+      - ./logs:/app/logs
+
+volumes:
+  meteo-pgdata:
+
+networks:
+  meteo-net:
+    driver: bridge

@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+logs
+logs.txt
+*.log
+.env
+.env.local
+.git
+.gitignore
+.claude
+doc
+test
+**/*.md

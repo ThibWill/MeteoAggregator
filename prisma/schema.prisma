@@ -1,0 +1,198 @@
+// MeteoAggregator schema.
+// Design principles (see PLAN.md §5):
+//  - sources are first-class rows
+//  - measurements are one normalized table with a `kind` discriminator, so
+//    forecast-vs-observed comparison is a simple grouped query.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+enum SourceKind {
+  FORECAST
+  OBSERVATION
+}
+
+enum ReportStatus {
+  PENDING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum MeasurementKind {
+  FORECAST
+  OBSERVATION
+}
+
+enum WeatherCategory {
+  CLEAR
+  PARTLY_CLOUDY
+  CLOUDY
+  FOGGY
+  RAINY
+  HEAVY_RAIN
+  SNOWY
+  STORMY
+}
+
+enum PrecipLevel {
+  NONE
+  LIGHT
+  MODERATE
+  HEAVY
+}
+
+/// A weather source / connector (AROME today; more later).
+model Source {
+  id             Int        @id @default(autoincrement())
+  code           String     @unique
+  name           String
+  kind           SourceKind
+  maxHorizonDays Int        @map("max_horizon_days")
+  resolution     String?
+  active         Boolean    @default(true)
+  config         Json       @default("{}")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  towns        TownSource[]
+  reports      Report[]
+  measurements WeatherMeasurement[]
+
+  @@map("source")
+}
+
+/// A town we track. Centroid lat/lon come from geocoding on insert.
+model Town {
+  id         Int      @id @default(autoincrement())
+  name       String
+  country    String   @default("FR")
+  adminArea  String?  @map("admin_area")
+  latitude   Float?
+  longitude  Float?
+  bboxMinLon Float?   @map("bbox_min_lon")
+  bboxMinLat Float?   @map("bbox_min_lat")
+  bboxMaxLon Float?   @map("bbox_max_lon")
+  bboxMaxLat Float?   @map("bbox_max_lat")
+  /// PostGIS point (EPSG:4326); optional, for future spatial queries.
+  geom       Unsupported("geometry(Point, 4326)")?
+  timezone   String   @default("UTC")
+  active     Boolean  @default(true)
+  geocodedAt DateTime? @map("geocoded_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  sources      TownSource[]
+  reports      Report[]
+  measurements WeatherMeasurement[]
+
+  @@unique([name, country, adminArea])
+  @@map("town")
+}
+
+/// Which towns are tracked for which sources.
+model TownSource {
+  id       Int     @id @default(autoincrement())
+  townId   Int     @map("town_id")
+  sourceId Int     @map("source_id")
+  active   Boolean @default(true)
+
+  /// Resolved observation station for this town x source (climatologie).
+  /// Filled lazily on first fetch; `stationMeta` carries name/distance/lat/lon.
+  stationId   String? @map("station_id")
+  stationMeta Json?   @map("station_meta")
+
+  town   Town   @relation(fields: [townId], references: [id], onDelete: Cascade)
+  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([townId, sourceId])
+  @@index([sourceId, active])
+  @@map("town_source")
+}
+
+/// Configurable intra-day windows (offsets in minutes from UTC midnight).
+model TimeRange {
+  id          Int      @id @default(autoincrement())
+  code        String?
+  startMinute Int      @map("start_minute")
+  endMinute   Int      @map("end_minute")
+  sortOrder   Int      @map("sort_order")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  measurements WeatherMeasurement[]
+
+  @@map("time_range")
+}
+
+/// One orchestration record per (town, source, run) of the daily task.
+model Report {
+  id           Int          @id @default(autoincrement())
+  runDate      DateTime     @map("run_date") @db.Date
+  townId       Int          @map("town_id")
+  sourceId     Int          @map("source_id")
+  modelRunTime DateTime?    @map("model_run_time") @db.Timestamptz(3)
+  horizonDays  Int          @map("horizon_days")
+  status       ReportStatus @default(PENDING)
+  error        String?
+  startedAt    DateTime?    @map("started_at") @db.Timestamptz(3)
+  finishedAt   DateTime?    @map("finished_at") @db.Timestamptz(3)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  town         Town                 @relation(fields: [townId], references: [id], onDelete: Cascade)
+  source       Source               @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  measurements WeatherMeasurement[]
+
+  @@unique([runDate, townId, sourceId])
+  @@map("report")
+}
+
+/// The core data table. One row = one town x source x target_date x
+/// time_range x reference_time, of a given `kind`.
+model WeatherMeasurement {
+  id            Int             @id @default(autoincrement())
+  reportId      Int?            @map("report_id")
+  townId        Int             @map("town_id")
+  sourceId      Int             @map("source_id")
+  kind          MeasurementKind
+  targetDate    DateTime        @map("target_date") @db.Date
+  timeRangeId   Int             @map("time_range_id")
+  referenceTime DateTime?       @map("reference_time") @db.Timestamptz(3)
+  runDate       DateTime?       @map("run_date") @db.Date
+  leadDays      Int?            @map("lead_days")
+
+  precipitationMm Float? @map("precipitation_mm")
+  cloudCoverPct   Float? @map("cloud_cover_pct")
+  temperatureC    Float? @map("temperature_c")
+  windSpeedMs     Float? @map("wind_speed_ms")
+  windGustMs      Float? @map("wind_gust_ms")
+  capeJkg         Float? @map("cape_jkg")
+
+  category    WeatherCategory
+  precipLevel PrecipLevel     @map("precip_level")
+
+  raw       Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  report    Report?   @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  town      Town      @relation(fields: [townId], references: [id], onDelete: Cascade)
+  source    Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  timeRange TimeRange @relation(fields: [timeRangeId], references: [id])
+
+  @@unique([sourceId, kind, townId, targetDate, timeRangeId, referenceTime], name: "measurement_natural_key")
+  @@index([townId, targetDate, timeRangeId])
+  @@index([sourceId, kind, targetDate])
+  @@index([targetDate, leadDays])
+  @@map("weather_measurement")
+}

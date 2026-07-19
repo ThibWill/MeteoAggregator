@@ -1,0 +1,6 @@
+[
+  { "id": 69299001, "nom": "LYON-BRON", "posteOuvert": true, "typePoste": 1, "lat": 45.726, "lon": 4.944, "alt": 197 },
+  { "id": 69123001, "nom": "LYON-SAINT-EXUPERY", "posteOuvert": true, "typePoste": 0, "lat": 45.726, "lon": 5.078, "alt": 235 },
+  { "id": 69034002, "nom": "CLOSED-STATION", "posteOuvert": false, "typePoste": 1, "lat": 45.75, "lon": 4.85, "alt": 200 },
+  { "id": 69250005, "nom": "AMATEUR-NEARBY", "posteOuvert": true, "typePoste": 5, "lat": 45.758, "lon": 4.835, "alt": 180 }
+]

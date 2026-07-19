@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wcs:CoverageDescriptions xmlns:wcs="http://www.opengis.net/wcs/2.0"
+                          xmlns:gml="http://www.opengis.net/gml/3.2"
+                          xmlns:gmlrgrid="http://www.opengis.net/gml/3.3/rgrid"
+                          xmlns:swe="http://www.opengis.net/swe/2.0"
+                          xmlns:gmlcov="http://www.opengis.net/gmlcov/1.0">
+  <wcs:CoverageDescription gml:id="TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND___2026-07-19T12.00.00Z">
+    <gml:boundedBy>
+      <gml:EnvelopeWithTimePeriod srsName="http://meteofrance.fr/def/crs/3DLongLatHeight"
+                                  axisLabels="long lat height time" uomLabels="deg deg m ISO8601" srsDimension="3">
+        <gml:lowerCorner>-12 37.5 2</gml:lowerCorner>
+        <gml:upperCorner>16 55.4 3000</gml:upperCorner>
+        <gml:beginPosition frame="#ISO-8601">2026-07-19T12:00:00Z</gml:beginPosition>
+        <gml:endPosition frame="#ISO-8601">2026-07-19T15:00:00Z</gml:endPosition>
+      </gml:EnvelopeWithTimePeriod>
+    </gml:boundedBy>
+    <wcs:CoverageId>TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND___2026-07-19T12.00.00Z</wcs:CoverageId>
+    <gml:domainSet>
+      <gmlrgrid:ReferenceableGridByVectors dimension="4">
+        <gml:axisLabels>long lat height time</gml:axisLabels>
+        <gmlrgrid:generalGridAxis>
+          <gmlrgrid:GeneralGridAxis>
+            <gmlrgrid:coefficients/>
+            <gmlrgrid:gridAxesSpanned>long</gmlrgrid:gridAxesSpanned>
+          </gmlrgrid:GeneralGridAxis>
+        </gmlrgrid:generalGridAxis>
+        <gmlrgrid:generalGridAxis>
+          <gmlrgrid:GeneralGridAxis>
+            <gmlrgrid:coefficients/>
+            <gmlrgrid:gridAxesSpanned>lat</gmlrgrid:gridAxesSpanned>
+          </gmlrgrid:GeneralGridAxis>
+        </gmlrgrid:generalGridAxis>
+        <gmlrgrid:generalGridAxis>
+          <gmlrgrid:GeneralGridAxis>
+            <gmlrgrid:coefficients>2 10 20 35 50 75 100</gmlrgrid:coefficients>
+            <gmlrgrid:gridAxesSpanned>height</gmlrgrid:gridAxesSpanned>
+          </gmlrgrid:GeneralGridAxis>
+        </gmlrgrid:generalGridAxis>
+        <gmlrgrid:generalGridAxis>
+          <gmlrgrid:GeneralGridAxis>
+            <gmlrgrid:coefficients>0 3600 7200 10800</gmlrgrid:coefficients>
+            <gmlrgrid:gridAxesSpanned>time</gmlrgrid:gridAxesSpanned>
+          </gmlrgrid:GeneralGridAxis>
+        </gmlrgrid:generalGridAxis>
+      </gmlrgrid:ReferenceableGridByVectors>
+    </gml:domainSet>
+    <gmlcov:rangeType>
+      <swe:DataRecord>
+        <swe:field name="TEMPERATURE__SPECIFIC_HEIGHT_LEVEL_ABOVE_GROUND">
+          <swe:Quantity><swe:uom code="K"/></swe:Quantity>
+        </swe:field>
+      </swe:DataRecord>
+    </gmlcov:rangeType>
+  </wcs:CoverageDescription>
+</wcs:CoverageDescriptions>
