@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wcs:CoverageDescriptions xmlns:wcs="http://www.opengis.net/wcs/2.0"
+                          xmlns:gml="http://www.opengis.net/gml/3.2"
+                          xmlns:gmlrgrid="http://www.opengis.net/gml/3.3/rgrid"
+                          xmlns:swe="http://www.opengis.net/swe/2.0"
+                          xmlns:gmlcov="http://www.opengis.net/gmlcov/1.0">
+  <wcs:CoverageDescription gml:id="TOTAL_PRECIPITATION__GROUND_OR_WATER_SURFACE___2026-07-19T12.00.00Z_PT1H">
+    <gml:boundedBy>
+      <gml:EnvelopeWithTimePeriod srsName="http://meteofrance.fr/def/crs/2DLongLat"
+                                  axisLabels="long lat time" uomLabels="deg deg ISO8601" srsDimension="2">
+        <gml:lowerCorner>-12 37.5</gml:lowerCorner>
+        <gml:upperCorner>16 55.4</gml:upperCorner>
+        <gml:beginPosition frame="#ISO-8601">2026-07-19T13:00:00Z</gml:beginPosition>
+        <gml:endPosition frame="#ISO-8601">2026-07-19T15:00:00Z</gml:endPosition>
+      </gml:EnvelopeWithTimePeriod>
+    </gml:boundedBy>
+    <wcs:CoverageId>TOTAL_PRECIPITATION__GROUND_OR_WATER_SURFACE___2026-07-19T12.00.00Z_PT1H</wcs:CoverageId>
+    <gml:domainSet>
+      <gmlrgrid:ReferenceableGridByVectors dimension="3">
+        <gml:axisLabels>long lat time</gml:axisLabels>
+        <gmlrgrid:generalGridAxis>
+          <gmlrgrid:GeneralGridAxis>
+            <gmlrgrid:coefficients/>
+            <gmlrgrid:gridAxesSpanned>long</gmlrgrid:gridAxesSpanned>
+          </gmlrgrid:GeneralGridAxis>
+        </gmlrgrid:generalGridAxis>
+        <gmlrgrid:generalGridAxis>
+          <gmlrgrid:GeneralGridAxis>
+            <gmlrgrid:coefficients/>
+            <gmlrgrid:gridAxesSpanned>lat</gmlrgrid:gridAxesSpanned>
+          </gmlrgrid:GeneralGridAxis>
+        </gmlrgrid:generalGridAxis>
+        <gmlrgrid:generalGridAxis>
+          <gmlrgrid:GeneralGridAxis>
+            <gmlrgrid:coefficients>3600 7200 10800</gmlrgrid:coefficients>
+            <gmlrgrid:gridAxesSpanned>time</gmlrgrid:gridAxesSpanned>
+          </gmlrgrid:GeneralGridAxis>
+        </gmlrgrid:generalGridAxis>
+      </gmlrgrid:ReferenceableGridByVectors>
+    </gml:domainSet>
+    <gmlcov:rangeType>
+      <swe:DataRecord>
+        <swe:field name="TOTAL_PRECIPITATION__GROUND_OR_WATER_SURFACE">
+          <swe:Quantity><swe:uom code="kg.m-2"/></swe:Quantity>
+        </swe:field>
+      </swe:DataRecord>
+    </gmlcov:rangeType>
+  </wcs:CoverageDescription>
+</wcs:CoverageDescriptions>

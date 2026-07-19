@@ -7,6 +7,10 @@ const xml = readFileSync(
   fileURLToPath(new URL('./fixtures/describecoverage.xml', import.meta.url)),
   'utf8',
 );
+const accumulatedXml = readFileSync(
+  fileURLToPath(new URL('./fixtures/describecoverage-accumulated.xml', import.meta.url)),
+  'utf8',
+);
 
 describe('DescribeCoverage parsing', () => {
   it('extracts axis labels, bounds, height levels, and seconds-offset time steps', () => {
@@ -21,6 +25,20 @@ describe('DescribeCoverage parsing', () => {
     // beginPosition 2026-07-19T12:00:00Z + {0,3600,7200,10800}s
     expect(desc.timeSteps.map((t) => t.toISOString())).toEqual([
       '2026-07-19T12:00:00.000Z',
+      '2026-07-19T13:00:00.000Z',
+      '2026-07-19T14:00:00.000Z',
+      '2026-07-19T15:00:00.000Z',
+    ]);
+  });
+
+  it('derives time steps from the run reference time, not beginPosition, for accumulated fields', () => {
+    // Reference time is 12:00Z (from the CoverageId), but beginPosition is
+    // 13:00Z (the coverage's first published step, ref+1h) while the time
+    // axis coefficients (3600, 7200, 10800) are still offsets from 12:00Z.
+    // Using beginPosition as the origin would double-count that first hour
+    // and overrun endPosition (15:00Z) by producing a spurious 16:00Z step.
+    const desc = parseDescribeCoverage(accumulatedXml);
+    expect(desc.timeSteps.map((t) => t.toISOString())).toEqual([
       '2026-07-19T13:00:00.000Z',
       '2026-07-19T14:00:00.000Z',
       '2026-07-19T15:00:00.000Z',
