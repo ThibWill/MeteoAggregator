@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { GeoPoint } from '../types.js';
+import { parseRunToken, splitCoverageId } from './capabilities.js';
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -58,8 +59,12 @@ function parseNums(s: string | undefined): number[] {
  * Parse a WCS 2.0 DescribeCoverage document (Météo-France AROME flavour).
  *
  * Time axis: AROME encodes valid times as **seconds offsets** in the time
- * axis `coefficients`, relative to `boundedBy/EnvelopeWithTimePeriod/beginPosition`.
- * So validTime[i] = beginPosition + coefficient[i] seconds.
+ * axis `coefficients`, relative to the coverage's run reference time (the
+ * `..._<ISO>Z[_P...]` suffix on its CoverageId) — NOT `beginPosition`. For
+ * instantaneous fields those happen to coincide (first coefficient is `0`),
+ * but for accumulated fields (e.g. precipitation) `beginPosition` is already
+ * `referenceTime + firstCoefficient`, so using it as the origin double-counts
+ * that offset and overruns the coverage's real `endPosition` by one step.
  */
 export function parseDescribeCoverage(xml: string): CoverageDescription {
   const doc = parser.parse(xml);
@@ -82,9 +87,13 @@ export function parseDescribeCoverage(xml: string): CoverageDescription {
   const lonMin = pick(lo[lonIdx], hi[lonIdx], Math.min);
   const lonMax = pick(lo[lonIdx], hi[lonIdx], Math.max);
 
-  // Reference time for the seconds-offset coefficients.
+  // Origin for the seconds-offset time coefficients: the run reference time
+  // parsed from the CoverageId, falling back to beginPosition if absent.
+  const coverageId = firstDefined(desc?.CoverageId, desc?.Identifier, desc?.['@_id']);
+  const { runToken } = splitCoverageId(coverageId ?? '');
+  const refTime = parseRunToken(runToken);
   const beginIso = firstDefined(envelope.beginPosition);
-  const beginMs = beginIso ? Date.parse(beginIso) : NaN;
+  const beginMs = refTime ? refTime.getTime() : beginIso ? Date.parse(beginIso) : NaN;
 
   // Walk the general grid axes to find time (seconds) and height (metres).
   const grid =
