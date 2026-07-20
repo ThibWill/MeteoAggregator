@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { aggregate, prepareSeries } from '../src/domain/aggregate.js';
+import {
+  aggregate,
+  expectedSteps,
+  prepareSeries,
+  sampleCoverage,
+} from '../src/domain/aggregate.js';
+import { rangeBounds } from '../src/domain/timeRanges.js';
 import type { ForecastSample } from '../src/connectors/types.js';
 import type { TimeRangeDef } from '../src/domain/timeRanges.js';
 
@@ -97,5 +103,42 @@ describe('aggregateWindow', () => {
     const agg = aggregate(noPrecip, '2026-07-19', morning, 'UTC');
     expect(agg!.precipitationMm).toBeNull();
     expect(agg!.temperatureC).toBe(16);
+  });
+});
+
+describe('window coverage', () => {
+  it('spans from the first step to one step past the last', () => {
+    const cov = sampleCoverage(samples, 60)!;
+    expect(cov.start.toISOString()).toBe('2026-07-19T07:00:00.000Z');
+    expect(cov.end.toISOString()).toBe('2026-07-19T15:00:00.000Z');
+  });
+
+  it('has no coverage without samples', () => {
+    expect(sampleCoverage([], 60)).toBeNull();
+  });
+
+  it('expects one step per hour of the window', () => {
+    expect(expectedSteps(rangeBounds('2026-07-19', morning, 'UTC'), 60)).toBe(6);
+    expect(expectedSteps(rangeBounds('2026-07-19', morning, 'UTC'), 180)).toBe(2);
+  });
+
+  it('accounts for the longer and shorter DST days', () => {
+    const day = { startMinute: 0, endMinute: 1440 };
+    expect(expectedSteps(rangeBounds('2026-03-29', day, 'Europe/Paris'), 60)).toBe(23);
+    expect(expectedSteps(rangeBounds('2026-10-25', day, 'Europe/Paris'), 60)).toBe(25);
+  });
+
+  it('flags the window straddling the run start as not fully covered', () => {
+    // A run starting at 18:00Z only covers 1 hour of the 13:00-19:00Z window.
+    const lateRun = [s('2026-07-19T18:00:00Z', { precipitation_mm: 0.2 })];
+    const afternoon = { startMinute: 780, endMinute: 1140 };
+    const bounds = rangeBounds('2026-07-19', afternoon, 'UTC');
+    const cov = sampleCoverage(lateRun, 60)!;
+    expect(bounds.start < cov.start).toBe(true);
+
+    // Aggregation alone would happily return a 1-step (biased) window.
+    const agg = aggregate(lateRun, '2026-07-19', { ...morning, ...afternoon }, 'UTC');
+    expect(agg!.raw.stepCount).toBe(1);
+    expect(agg!.raw.stepCount).toBeLessThan(expectedSteps(bounds, 60));
   });
 });

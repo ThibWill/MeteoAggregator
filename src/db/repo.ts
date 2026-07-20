@@ -58,22 +58,28 @@ export async function loadActiveForecastPairs(): Promise<ActiveForecastPair[]> {
 }
 
 /**
- * Local dates (`YYYY-MM-DD`) that already have OBSERVATION rows for a
- * (source, town), within `[from, to]` inclusive. Used to skip re-fetching days
- * we already backfilled.
+ * Local dates (`YYYY-MM-DD`) that have a *complete* set of OBSERVATION rows for
+ * a (source, town) within `[from, to]` inclusive — one per active time range.
+ * Days still missing a window stay eligible for re-fetching, since the archive
+ * publishes late and a day can land in pieces.
  */
-export async function existingObservationDates(
+export async function completeObservationDates(
   sourceId: number,
   townId: number,
   from: Date,
   to: Date,
+  rangeCount: number,
 ): Promise<Set<string>> {
-  const rows = await prisma.weatherMeasurement.findMany({
+  const rows = await prisma.weatherMeasurement.groupBy({
+    by: ['targetDate'],
     where: { sourceId, townId, kind: 'OBSERVATION', targetDate: { gte: from, lte: to } },
-    distinct: ['targetDate'],
-    select: { targetDate: true },
+    _count: { timeRangeId: true },
   });
-  return new Set(rows.map((r) => r.targetDate.toISOString().slice(0, 10)));
+  return new Set(
+    rows
+      .filter((r) => r._count.timeRangeId >= rangeCount)
+      .map((r) => r.targetDate.toISOString().slice(0, 10)),
+  );
 }
 
 /** Persist a geocoded centroid (and PostGIS point) for a town. */
@@ -115,6 +121,7 @@ export interface UpsertMeasurementInput {
   referenceTime: Date;
   runDate: Date | null;
   leadDays: number | null;
+  leadMinutes: number | null;
   values: {
     precipitationMm: number | null;
     cloudCoverPct: number | null;
@@ -139,6 +146,7 @@ function toRowData(input: UpsertMeasurementInput) {
     referenceTime: input.referenceTime,
     runDate: input.runDate,
     leadDays: input.leadDays,
+    leadMinutes: input.leadMinutes,
     precipitationMm: input.values.precipitationMm,
     cloudCoverPct: input.values.cloudCoverPct,
     temperatureC: input.values.temperatureC,

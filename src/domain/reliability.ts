@@ -10,12 +10,32 @@ export const WINDOWS = [
   { label: '365d', days: 365 },
 ] as const;
 
+/**
+ * Forecast maturity buckets, in hours. `lead_days` shifts with the cron hour
+ * (an evening run's "lead 0" is a few hours out, a dawn run's is most of a day),
+ * so scores are grouped by how far ahead the forecast actually was.
+ */
+export const MATURITY_BUCKETS = [6, 12, 24, 36, 48] as const;
+
+/** Bucket label for a lead in minutes, e.g. `6-12h`; null when unknown. */
+export function maturityBucket(leadMinutes: number | null): string | null {
+  if (leadMinutes === null) return null;
+  const hours = leadMinutes / 60;
+  let lower = 0;
+  for (const upper of MATURITY_BUCKETS) {
+    if (hours < upper) return `${lower}-${upper}h`;
+    lower = upper;
+  }
+  return `${lower}h+`;
+}
+
 /** One matched forecast/observation pair (a row of `forecast_vs_observed`). */
 export interface PairRow {
   sourceId: number;
   townId: number;
   timeRangeId: number;
   leadDays: number | null;
+  leadMinutes: number | null;
   targetDate: string;
   forecastCategory: string;
   observedCategory: string;
@@ -38,6 +58,10 @@ export interface GroupStat {
   townId: number;
   timeRangeId: number;
   leadDays: number | null;
+  /** Maturity bucket the group covers; falls back to `d<lead_days>` when unknown. */
+  leadBucket: string;
+  /** Mean lead within the group, in hours — how far ahead these forecasts were. */
+  leadHours: number | null;
   n: number;
   catAgreePct: number | null;
   precipAgreePct: number | null;
@@ -105,21 +129,25 @@ function agreement(pairs: PairRow[], f: keyof PairRow, o: keyof PairRow): number
   return hits / pairs.length;
 }
 
-/** Aggregate matched pairs into per-(source, town, time_range, lead_days) stats. */
+/** Aggregate matched pairs into per-(source, town, time_range, maturity) stats. */
 export function computeGroupStats(pairs: PairRow[]): GroupStat[] {
   const groups = new Map<string, PairRow[]>();
   for (const p of pairs) {
-    const key = `${p.sourceId}|${p.townId}|${p.timeRangeId}|${p.leadDays}`;
+    const bucket = maturityBucket(p.leadMinutes) ?? `d${p.leadDays}`;
+    const key = `${p.sourceId}|${p.townId}|${p.timeRangeId}|${bucket}`;
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(p);
   }
   const out: GroupStat[] = [];
   for (const g of groups.values()) {
     const first = g[0]!;
+    const leads = g.map((p) => p.leadMinutes).filter((m): m is number => m !== null);
     out.push({
       sourceId: first.sourceId,
       townId: first.townId,
       timeRangeId: first.timeRangeId,
       leadDays: first.leadDays,
+      leadBucket: maturityBucket(first.leadMinutes) ?? `d${first.leadDays}`,
+      leadHours: leads.length === 0 ? null : mean(leads)! / 60,
       n: g.length,
       catAgreePct: agreement(g, 'forecastCategory', 'observedCategory'),
       precipAgreePct: agreement(g, 'forecastPrecipLevel', 'observedPrecipLevel'),
@@ -137,7 +165,7 @@ export function computeGroupStats(pairs: PairRow[]): GroupStat[] {
     (a, b) =>
       a.townId - b.townId ||
       a.timeRangeId - b.timeRangeId ||
-      (a.leadDays ?? 0) - (b.leadDays ?? 0),
+      (a.leadHours ?? 0) - (b.leadHours ?? 0),
   );
 }
 
@@ -172,7 +200,7 @@ async function fetchPairs(filter: ReliabilityFilter, since: Date): Promise<PairR
   const where = Prisma.join(conds, ' AND ');
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>(Prisma.sql`
     SELECT
-      source_id, town_id, time_range_id, lead_days, target_date,
+      source_id, town_id, time_range_id, lead_days, lead_minutes, target_date,
       forecast_category, observed_category,
       forecast_precip_level, observed_precip_level,
       forecast_precip_mm, observed_precip_mm,
@@ -188,6 +216,7 @@ async function fetchPairs(filter: ReliabilityFilter, since: Date): Promise<PairR
     townId: Number(r.town_id),
     timeRangeId: Number(r.time_range_id),
     leadDays: num(r.lead_days),
+    leadMinutes: num(r.lead_minutes),
     targetDate: (r.target_date as Date).toISOString().slice(0, 10),
     forecastCategory: String(r.forecast_category),
     observedCategory: String(r.observed_category),
