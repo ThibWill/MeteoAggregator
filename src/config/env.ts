@@ -44,6 +44,19 @@ const EnvSchema = z.object({
   AROME_STEP_HOURS: z.coerce.number().int().positive().default(1),
 
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+
+  // --- Read API (src/api) ---
+  API_PORT: z.coerce.number().int().positive().default(3000),
+  API_HOST: z.string().default('0.0.0.0'),
+  // Comma-separated origin list; '*' only for dev.
+  API_CORS_ORIGINS: z.string().default('*'),
+  API_MAX_PAGE_SIZE: z.coerce.number().int().positive().default(1000),
+  API_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(300),
+  // z.coerce.boolean() makes any non-empty string true, so parse explicitly.
+  API_ENABLE_ADMIN: z
+    .enum(['true', 'false', '1', '0'])
+    .default('true')
+    .transform((v) => v === 'true' || v === '1'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

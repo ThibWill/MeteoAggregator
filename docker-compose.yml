@@ -44,6 +44,32 @@ services:
     volumes:
       - ./logs:/app/logs
 
+  # Read API. Reuses the batch image (same src/, node_modules and generated
+  # Prisma client), so no Dockerfile change is needed. Deliberately outside the
+  # "app" profile: `docker compose up -d` brings up db + api, while batch tasks
+  # stay on demand.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: meteo-aggregator:local
+    container_name: meteo-api
+    command: npm run api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://meteo:meteo@db:5432/meteo?schema=public
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - meteo-net
+    volumes:
+      - ./logs:/app/logs
+
 volumes:
   meteo-pgdata:
 

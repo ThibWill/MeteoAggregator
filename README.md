@@ -60,8 +60,68 @@ npm run daily
 | `npm run run-once -- --town=Lyon` | Run the orchestrator for a single town (debugging). |
 | `npm run backfill:obs -- [--days=365] [--from=YYYY-MM-DD --to=…] [--town=Lyon]` | Backfill observations from the DPClim archive (one order per station over the span). |
 | `npm run reliability -- [--window=7\|30\|365] [--town=Lyon] [--source=…] [--json]` | Forecast-vs-observed reliability stats per source × town × time range × lead day. |
+| `npm run api` | Start the read HTTP API (see below). |
+| `npm run api:dev` | Same, with reload on change. |
 
 > Note the `--` before script args (`npm run run-once -- --town=Lyon`).
+
+## Read API
+
+```bash
+npm run api     # http://localhost:3000
+```
+
+Browse the interactive docs at **<http://localhost:3000/docs>**; the OpenAPI
+document itself is at `/openapi.json` and is the contract a front end generates
+its client from. Everything is UTC and ISO-8601: dates are `YYYY-MM-DD`,
+instants end in `Z`.
+
+| Endpoint | What it returns |
+|---|---|
+| `GET /health`, `GET /health/db` | Liveness, and readiness (`503` if Postgres is unreachable). |
+| `GET /towns`, `GET /towns/:id` | Tracked towns; the detail adds source links and a `coverage` block (first/last target date + row count). |
+| `GET /sources` | Weather sources. `config` is never exposed. |
+| `GET /time-ranges` | Active intra-day windows, with a derived `"07:00–13:00"` label. |
+| `GET /measurements` | The core endpoint: forecast + observation rows for **one town** over a period. |
+| `GET /measurements/timeseries` | The same rows pivoted into chart-ready series. |
+| `GET /comparison` | Forecast rows paired with their observed counterpart, with `delta` and match flags. |
+| `GET /reliability` | Rolling 7d/30d/365d stats and the category confusion matrix. |
+| `GET /reports`, `/reports/:id`, `/reports/summary` | Batch run history and per-day status counts. |
+| `POST /admin/jobs/daily-run`, `POST /admin/jobs/backfill-observations`, `GET /admin/jobs[/:id]` | Trigger and follow the batch tasks. |
+
+Conventions:
+
+- Collections return `{ "data": [...], "meta": { total, limit, offset } }`;
+  single resources return the object directly.
+- `limit` defaults to 100, max 1000. Give `from`/`to` (inclusive) to pick a
+  period — with neither, you get the **last 7 days**, never the whole archive.
+  Measurement periods are capped at 400 days.
+- `/measurements` **requires** a town (`?town=Lyon` or `?townId=1`) so a query
+  can never scan every town. An unknown name is a `404`, not an empty list.
+- `latestOnly=true` (the default) keeps only the most recent model run per
+  (source, target date, time range). Pass `latestOnly=false` to see how a
+  forecast changed as the target date approached.
+- The bulky `raw` payload is omitted unless you ask for `?include=raw`.
+- Errors always look like
+  `{ "error": { "code": "BAD_REQUEST", "message": "...", "details": [...] } }`.
+
+Examples:
+
+```bash
+curl 'localhost:3000/measurements?town=Lyon&from=2026-07-19&to=2026-07-21'
+curl 'localhost:3000/measurements/timeseries?town=Lyon&sourceId=1&kind=FORECAST'
+curl 'localhost:3000/reliability?town=Lyon&window=30d'
+curl -X POST localhost:3000/admin/jobs/daily-run -H 'content-type: application/json' -d '{}'
+```
+
+> **The API has no authentication.** It is meant for a private network. The
+> `/admin/*` triggers start real batch jobs, so do not publish port 3000 on a
+> public interface — set `API_ENABLE_ADMIN=false` and put a proxy in front if
+> you must. Job history is in-memory and lost on restart; the `report` table is
+> the durable record.
+
+In Docker, `docker compose up -d` now brings up **db + api** together (batch
+tasks stay on demand under the `app` profile).
 
 ## Configuration (`.env`)
 
@@ -81,6 +141,12 @@ npm run daily
 | `HTTP_TIMEOUT_MS` | `30000` | Per-request timeout. |
 | `HTTP_MAX_RETRIES` | `3` | Retries on transient (429/5xx/network) failures. |
 | `LOG_LEVEL` | `info` | `debug`/`info`/`warn`/`error`. |
+| `API_PORT` | `3000` | Port the read API listens on. |
+| `API_HOST` | `0.0.0.0` | Bind address (so it is reachable inside the compose network; the **published port** decides exposure). |
+| `API_CORS_ORIGINS` | `*` | Comma-separated allowed origins. `*` is dev-only. |
+| `API_MAX_PAGE_SIZE` | `1000` | Hard cap on `limit`. |
+| `API_RATE_LIMIT_PER_MIN` | `300` | Requests per minute per IP. |
+| `API_ENABLE_ADMIN` | `true` | Set `false` to drop the `/admin/*` job triggers entirely. |
 
 ## How it works
 
@@ -145,9 +211,17 @@ src/
     observation/ stub.ts (disabled)
   geocoding/   BAN + Nominatim geocoder (+ department resolver)
   domain/      timeRanges, aggregate, categorize, units, reliability
-  tasks/       dailyRun orchestrator, observation writer
+  tasks/       dailyRun orchestrator, observation writer, observation backfill
   cli/         seed, daily, geocode, runOnce, backfillObs, reliability
+  api/         Fastify read API
+    server.ts  buildServer(): plugins + routes (no listen)
+    start.ts   entrypoint: listen + graceful shutdown
+    plugins/   prisma, errors, openapi, auth (extension point)
+    schemas/   zod schemas — validation, TS types and OpenAPI in one place
+    routes/    parse + delegate; no Prisma calls here
+    services/  queries and row→DTO mapping; testable without HTTP
 test/          fixtures + unit tests
+test/api/      schema, mapping, job-registry and route (inject) tests
 prisma/        schema.prisma + migrations (incl. PostGIS + forecast_vs_observed view)
 ```
 
@@ -162,6 +236,12 @@ DescribeCoverage parsing, run resolution, window aggregation (incl. accumulated
 precip differencing), categorization thresholds, unit conversions, and time-range
 math. They need neither the database nor the live API. Live-API integration is
 gated behind having `METEOFRANCE_API_KEY` set (`npm run daily`).
+
+The API tests use `server.inject()` (no port binding). Schema, mapping and
+job-registry tests need nothing; the route tests in `test/api/routes.db.test.ts`
+run against whatever `DATABASE_URL` points at and **skip themselves** when no
+database is reachable. `test/api/server.test.ts` also snapshots the `/openapi.json`
+route surface, so an unintended contract change shows up as a diff.
 
 ## Extending
 

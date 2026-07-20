@@ -1,4 +1,5 @@
 import { prisma, disconnect } from '../db/client.js';
+import { loadNameMaps } from '../db/repo.js';
 import {
   computeReliability,
   WINDOWS,
@@ -22,12 +23,7 @@ async function main(): Promise<void> {
   const townName = argValue('town');
   const sourceCode = argValue('source');
 
-  const townMap = new Map<number, string>();
-  for (const t of await prisma.town.findMany()) townMap.set(t.id, t.name);
-  const rangeMap = new Map<number, string>();
-  for (const r of await prisma.timeRange.findMany()) {
-    rangeMap.set(r.id, r.code ?? `${r.startMinute}-${r.endMinute}`);
-  }
+  const { towns: townMap, timeRanges: rangeMap } = await loadNameMaps();
 
   const town = townName
     ? await prisma.town.findFirst({ where: { name: { equals: townName, mode: 'insensitive' } } })

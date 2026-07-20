@@ -195,3 +195,31 @@ export async function replaceReportMeasurements(
     }
   });
 }
+
+/** Display names keyed by id, for reports that only carry foreign keys. */
+export interface NameMaps {
+  towns: Map<number, string>;
+  timeRanges: Map<number, string>;
+  sources: Map<number, string>;
+}
+
+/**
+ * Shared by the reliability CLI and the API: both need to turn the ids in a
+ * `GroupStat` into something readable.
+ */
+export async function loadNameMaps(): Promise<NameMaps> {
+  const [towns, ranges, sources] = await Promise.all([
+    prisma.town.findMany({ select: { id: true, name: true } }),
+    prisma.timeRange.findMany({
+      select: { id: true, code: true, startMinute: true, endMinute: true },
+    }),
+    prisma.source.findMany({ select: { id: true, code: true } }),
+  ]);
+  return {
+    towns: new Map(towns.map((t) => [t.id, t.name] as const)),
+    timeRanges: new Map(
+      ranges.map((r) => [r.id, r.code ?? `${r.startMinute}-${r.endMinute}`] as const),
+    ),
+    sources: new Map(sources.map((s) => [s.id, s.code] as const)),
+  };
+}

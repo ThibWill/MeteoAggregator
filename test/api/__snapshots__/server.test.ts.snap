@@ -1,0 +1,57 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`OpenAPI contract > matches the committed contract snapshot 1`] = `
+{
+  "/admin/jobs": [
+    "get",
+  ],
+  "/admin/jobs/backfill-observations": [
+    "post",
+  ],
+  "/admin/jobs/daily-run": [
+    "post",
+  ],
+  "/admin/jobs/{id}": [
+    "get",
+  ],
+  "/comparison": [
+    "get",
+  ],
+  "/health": [
+    "get",
+  ],
+  "/health/db": [
+    "get",
+  ],
+  "/measurements": [
+    "get",
+  ],
+  "/measurements/timeseries": [
+    "get",
+  ],
+  "/reliability": [
+    "get",
+  ],
+  "/reports": [
+    "get",
+  ],
+  "/reports/summary": [
+    "get",
+  ],
+  "/reports/{id}": [
+    "get",
+  ],
+  "/sources": [
+    "get",
+  ],
+  "/time-ranges": [
+    "get",
+  ],
+  "/towns": [
+    "get",
+  ],
+  "/towns/{id}": [
+    "get",
+  ],
+}
+`;
