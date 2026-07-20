@@ -125,6 +125,29 @@ clock, so windows keep their hours across the 23h/25h DST days.
 `target_date` and `run_date` stay stored as `YYYY-MM-DDT00:00:00Z` markers: they
 label a local calendar day, they are not instants.
 
+## Forecast maturity, and why the cron hour doesn't matter
+
+Two rules keep the data comparable whatever time the cron fires:
+
+1. **Only fully-covered windows are written.** A window the model run spans just
+   part of (the one straddling the run start, or the tail past the horizon) would
+   aggregate from a fraction of its hours — precipitation especially, since it
+   sums — so it is dropped instead. `PARTIAL` is then reserved for genuine data
+   holes; windows outside the run are counted separately as `windowsOutOfRun`.
+   The same completeness rule applies to observations, so a full forecast is
+   never scored against a partly-observed window.
+2. **`lead_minutes` records the true maturity** (window start − run reference
+   time). `lead_days` shifts with the cron hour: for a 22:00 run the evening
+   window is a ~2h forecast, for a 05:10 run it is a ~14h one, yet both are
+   `lead_days = 0`. Reliability groups by maturity buckets (`0-6h`, `6-12h`,
+   `12-24h`, `24-36h`, `36-48h`, `48h+`), so scores stay comparable even if you
+   move the schedule.
+
+A given day is still forecast at every lead: today's windows were written by the
+two previous runs at `lead_days` 1 and 2. What an evening run cannot produce is a
+`lead_days = 0` row for windows that have already elapsed — that is not a gap,
+it is a forecast that never existed.
+
 ## Cron
 
 `npm run daily` is idempotent (unique constraints + upserts), so re-runs are

@@ -1,6 +1,6 @@
 import { upsertMeasurement } from '../db/repo.js';
 import type { ForecastSample } from '../connectors/types.js';
-import { aggregate } from '../domain/aggregate.js';
+import { aggregate, expectedSteps } from '../domain/aggregate.js';
 import { categorize } from '../domain/categorize.js';
 import {
   appTimeZone,
@@ -8,6 +8,9 @@ import {
   rangeBounds,
   type TimeRangeDef,
 } from '../domain/timeRanges.js';
+
+/** The DPClim archive is hourly. */
+const OBS_STEP_MINUTES = 60;
 
 export interface WriteObservationParams {
   obsSourceId: number;
@@ -31,10 +34,13 @@ export async function writeObservationSamples(params: WriteObservationParams): P
   for (const dayKey of dayKeys) {
     const targetDate = dateMarker(dayKey);
     for (const range of timeRanges) {
+      const bounds = rangeBounds(dayKey, range, zone);
       const agg = aggregate(samples, dayKey, range, zone);
-      if (!agg) continue;
+      // Same rule as forecasts: an incomplete observed window is a biased
+      // reference to score against, so skip it rather than half-fill it.
+      if (!agg || agg.raw.stepCount < expectedSteps(bounds, OBS_STEP_MINUTES)) continue;
       const cat = categorize(agg);
-      const windowStart = rangeBounds(dayKey, range, zone).start;
+      const windowStart = bounds.start;
       await upsertMeasurement({
         reportId: null,
         townId,
@@ -45,6 +51,7 @@ export async function writeObservationSamples(params: WriteObservationParams): P
         referenceTime: windowStart,
         runDate: targetDate,
         leadDays: 0,
+        leadMinutes: 0,
         values: {
           precipitationMm: agg.precipitationMm,
           cloudCoverPct: agg.cloudCoverPct,

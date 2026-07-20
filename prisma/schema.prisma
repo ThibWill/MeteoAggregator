@@ -172,6 +172,9 @@ model WeatherMeasurement {
   referenceTime DateTime?       @map("reference_time") @db.Timestamptz(3)
   runDate       DateTime?       @map("run_date") @db.Date
   leadDays      Int?            @map("lead_days")
+  /// True forecast maturity: window start − reference_time, in minutes. Unlike
+  /// lead_days it does not shift when the cron hour changes.
+  leadMinutes   Int?            @map("lead_minutes")
 
   precipitationMm Float? @map("precipitation_mm")
   cloudCoverPct   Float? @map("cloud_cover_pct")
@@ -196,5 +199,6 @@ model WeatherMeasurement {
   @@index([townId, targetDate, timeRangeId])
   @@index([sourceId, kind, targetDate])
   @@index([targetDate, leadDays])
+  @@index([targetDate, leadMinutes])
   @@map("weather_measurement")
 }

@@ -115,6 +115,7 @@ export interface UpsertMeasurementInput {
   referenceTime: Date;
   runDate: Date | null;
   leadDays: number | null;
+  leadMinutes: number | null;
   values: {
     precipitationMm: number | null;
     cloudCoverPct: number | null;
@@ -139,6 +140,7 @@ function toRowData(input: UpsertMeasurementInput) {
     referenceTime: input.referenceTime,
     runDate: input.runDate,
     leadDays: input.leadDays,
+    leadMinutes: input.leadMinutes,
     precipitationMm: input.values.precipitationMm,
     cloudCoverPct: input.values.cloudCoverPct,
     temperatureC: input.values.temperatureC,

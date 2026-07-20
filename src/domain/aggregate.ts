@@ -33,6 +33,38 @@ export interface AggregatedWindow {
   };
 }
 
+/**
+ * The instants a sample series actually covers, treating each step as spanning
+ * `stepMinutes`. Used to tell "this window is outside the run" apart from
+ * "this window is missing data".
+ */
+export function sampleCoverage(
+  samples: { validTime: Date }[],
+  stepMinutes: number,
+): { start: Date; end: Date } | null {
+  if (samples.length === 0) return null;
+  let first = samples[0]!.validTime.getTime();
+  let last = first;
+  for (const s of samples) {
+    const t = s.validTime.getTime();
+    if (t < first) first = t;
+    if (t > last) last = t;
+  }
+  return { start: new Date(first), end: new Date(last + stepMinutes * 60_000) };
+}
+
+/**
+ * Steps a window should hold at `stepMinutes` spacing. Derived from the window's
+ * real span so the 23h/25h DST days come out right.
+ */
+export function expectedSteps(
+  bounds: { start: Date; end: Date },
+  stepMinutes: number,
+): number {
+  const spanMinutes = (bounds.end.getTime() - bounds.start.getTime()) / 60_000;
+  return Math.max(1, Math.floor(spanMinutes / stepMinutes));
+}
+
 interface Point {
   validTime: Date;
   value: number;

@@ -12,7 +12,7 @@ import {
 } from '../db/repo.js';
 import { buildDefaultRegistry, type ConnectorRegistry } from '../connectors/registry.js';
 import { ALL_PARAMS, type GeoPoint } from '../connectors/types.js';
-import { aggregate } from '../domain/aggregate.js';
+import { aggregate, expectedSteps, sampleCoverage } from '../domain/aggregate.js';
 import { categorize } from '../domain/categorize.js';
 import {
   dateMarker,
@@ -20,6 +20,7 @@ import {
   horizonDates,
   leadDays,
   localDateKey,
+  rangeBounds,
   resolveZone,
   type TimeRangeDef,
 } from '../domain/timeRanges.js';
@@ -50,6 +51,7 @@ export async function dailyRun(opts: DailyRunOptions = {}): Promise<DailyRunSumm
   const registry = opts.registry ?? buildDefaultRegistry();
   const obsSourceCode = opts.observationSourceCode ?? 'mf-climatologie';
   const obsLookbackDays = safeLookbackDays();
+  const stepMinutes = safeStepMinutes();
 
   const timeRanges = await loadActiveTimeRanges();
   let pairs = await loadActiveForecastPairs();
@@ -100,14 +102,25 @@ export async function dailyRun(opts: DailyRunOptions = {}): Promise<DailyRunSumm
 
       const samples = await connector.fetchForecast(point, { now, params: ALL_PARAMS, zone });
       const referenceTime = connectorReference(samples) ?? now;
+      const coverage = sampleCoverage(samples, stepMinutes);
+      let windowsOutOfRun = 0;
       let windowsSkipped = 0;
       const forecastRows: UpsertMeasurementInput[] = [];
 
       for (const targetDateKey of horizonDates(now, pair.maxHorizonDays, zone)) {
         const targetDate = dateMarker(targetDateKey);
         for (const range of timeRanges) {
+          const bounds = rangeBounds(targetDateKey, range, zone);
+          // A window the run only partly spans (the one straddling the run
+          // start, or the tail past the horizon) would aggregate from a
+          // fraction of its hours — precipitation especially, since it sums.
+          // Drop it rather than write a silently biased row.
+          if (!coverage || bounds.start < coverage.start || bounds.end > coverage.end) {
+            windowsOutOfRun++;
+            continue;
+          }
           const agg = aggregate(samples, targetDateKey, range, zone);
-          if (!agg) {
+          if (!agg || agg.raw.stepCount < expectedSteps(bounds, stepMinutes)) {
             windowsSkipped++;
             continue;
           }
@@ -122,6 +135,9 @@ export async function dailyRun(opts: DailyRunOptions = {}): Promise<DailyRunSumm
             referenceTime,
             runDate,
             leadDays: leadDays(targetDateKey, runDateKey),
+            leadMinutes: Math.round(
+              (bounds.start.getTime() - referenceTime.getTime()) / 60_000,
+            ),
             values: {
               precipitationMm: agg.precipitationMm,
               cloudCoverPct: agg.cloudCoverPct,
@@ -169,6 +185,8 @@ export async function dailyRun(opts: DailyRunOptions = {}): Promise<DailyRunSumm
         }
       }
 
+      // Windows outside the run's span are expected (an evening run cannot
+      // forecast this morning), so only genuine data holes downgrade to PARTIAL.
       const status = windowsWritten === 0 ? 'FAILED' : windowsSkipped > 0 ? 'PARTIAL' : 'SUCCESS';
       await prisma.report.update({
         where: { id: report.id },
@@ -181,7 +199,7 @@ export async function dailyRun(opts: DailyRunOptions = {}): Promise<DailyRunSumm
       if (status === 'SUCCESS') summary.succeeded++;
       else if (status === 'PARTIAL') summary.partial++;
       else summary.failed++;
-      townLog.info('town done', { status, windowsWritten, windowsSkipped });
+      townLog.info('town done', { status, windowsWritten, windowsSkipped, windowsOutOfRun });
     } catch (err) {
       summary.failed++;
       const message = err instanceof Error ? err.message : String(err);
@@ -265,6 +283,15 @@ function safeLookbackDays(): number {
     return loadEnv().OBS_LOOKBACK_DAYS;
   } catch {
     return 3;
+  }
+}
+
+/** Native forecast step spacing, mirroring the connector's stride. */
+function safeStepMinutes(): number {
+  try {
+    return loadEnv().AROME_STEP_HOURS * 60;
+  } catch {
+    return 60;
   }
 }
 
