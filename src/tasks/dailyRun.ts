@@ -303,6 +303,6 @@ export async function ensureGeocoded(pair: ActiveForecastPair): Promise<GeoPoint
   }
   const result = await geocodeTown({ name: pair.town.name, country: pair.town.country });
   if (!result) throw new Error(`geocoding failed for ${pair.town.name}`);
-  await saveTownCoordinates(pair.townId, result.latitude, result.longitude, result.bbox);
+  await saveTownCoordinates(pair.townId, result.latitude, result.longitude);
   return { lat: result.latitude, lon: result.longitude };
 }

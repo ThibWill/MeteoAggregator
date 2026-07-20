@@ -78,10 +78,6 @@ model Town {
   adminArea  String?  @map("admin_area")
   latitude   Float?
   longitude  Float?
-  bboxMinLon Float?   @map("bbox_min_lon")
-  bboxMinLat Float?   @map("bbox_min_lat")
-  bboxMaxLon Float?   @map("bbox_max_lon")
-  bboxMaxLat Float?   @map("bbox_max_lat")
   /// PostGIS point (EPSG:4326); optional, for future spatial queries.
   geom       Unsupported("geometry(Point, 4326)")?
   /// IANA zone (e.g. "Europe/Paris") defining this town's day and window

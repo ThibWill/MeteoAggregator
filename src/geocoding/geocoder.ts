@@ -11,7 +11,6 @@ export interface GeocodeQuery {
 export interface GeocodeResult {
   latitude: number;
   longitude: number;
-  bbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number };
   provider: 'adresse' | 'nominatim';
   label?: string;
 }
@@ -96,20 +95,14 @@ async function geocodeNominatim(q: GeocodeQuery): Promise<GeocodeResult | null> 
   const json = (await res.json()) as {
     lat?: string;
     lon?: string;
-    boundingbox?: [string, string, string, string];
     display_name?: string;
   }[];
   const first = json[0];
   if (!first?.lat || !first?.lon) return null;
-  const result: GeocodeResult = {
+  return {
     latitude: Number(first.lat),
     longitude: Number(first.lon),
     provider: 'nominatim',
     label: first.display_name,
   };
-  if (first.boundingbox && first.boundingbox.length === 4) {
-    const bb = first.boundingbox.map(Number) as [number, number, number, number];
-    result.bbox = { minLat: bb[0], maxLat: bb[1], minLon: bb[2], maxLon: bb[3] };
-  }
-  return result;
 }
