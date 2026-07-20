@@ -2,7 +2,7 @@ import { DateTime } from 'luxon';
 import { loadEnv } from '../config/env.js';
 import { prisma } from '../db/client.js';
 import {
-  existingObservationDates,
+  completeObservationDates,
   loadActiveForecastPairs,
   loadActiveTimeRanges,
   replaceReportMeasurements,
@@ -242,13 +242,14 @@ async function writeObservations(
   }
   const oldest = startOfToday.minus({ days: lookbackDays }).toISODate() as string;
   const newest = startOfToday.minus({ days: 1 }).toISODate() as string;
-  const present = await existingObservationDates(
+  const complete = await completeObservationDates(
     obsSourceId,
     pair.townId,
     dateMarker(oldest),
     dateMarker(newest),
+    timeRanges.length,
   );
-  const missing = wanted.filter((d) => !present.has(d));
+  const missing = wanted.filter((d) => !complete.has(d));
   if (missing.length === 0) {
     townLog.debug('observations up to date', { lookbackDays });
     return;

@@ -143,6 +143,13 @@ Two rules keep the data comparable whatever time the cron fires:
    `12-24h`, `24-36h`, `36-48h`, `48h+`), so scores stay comparable even if you
    move the schedule.
 
+Observations are never asked for today: the daily run backfills **J-1 …
+J-`OBS_LOOKBACK_DAYS`**, i.e. only days that have fully elapsed, so a 22:00 run
+reads sensor data for yesterday and before — never for the hours still to come.
+Today's observations are written by tomorrow's run. A day is treated as done
+only once **every** window has a row, so a day the archive published in pieces
+(or late) is retried on the following runs until it is complete.
+
 A given day is still forecast at every lead: today's windows were written by the
 two previous runs at `lead_days` 1 and 2. What an evening run cannot produce is a
 `lead_days = 0` row for windows that have already elapsed — that is not a gap,
