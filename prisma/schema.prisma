@@ -59,7 +59,6 @@ model Source {
   maxHorizonDays Int        @map("max_horizon_days")
   resolution     String?
   active         Boolean    @default(true)
-  config         Json       @default("{}")
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
 
