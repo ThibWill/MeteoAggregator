@@ -11,6 +11,7 @@ function pair(over: Partial<PairRow> = {}): PairRow {
     townId: 1,
     timeRangeId: 2,
     leadDays: 0,
+    leadMinutes: 60,
     targetDate: '2026-07-18',
     forecastCategory: 'RAINY',
     observedCategory: 'RAINY',
@@ -31,15 +32,33 @@ function pair(over: Partial<PairRow> = {}): PairRow {
 }
 
 describe('computeGroupStats', () => {
-  it('groups by (source, town, time_range, lead) and counts n', () => {
+  it('groups by (source, town, time_range, maturity) and counts n', () => {
     const stats = computeGroupStats([
-      pair({ leadDays: 0 }),
-      pair({ leadDays: 0 }),
-      pair({ leadDays: 1 }),
+      pair({ leadMinutes: 60 }),
+      pair({ leadMinutes: 120 }),
+      pair({ leadMinutes: 30 * 60 }),
     ]);
     expect(stats).toHaveLength(2);
-    const lead0 = stats.find((s) => s.leadDays === 0)!;
-    expect(lead0.n).toBe(2);
+    const short = stats.find((s) => s.leadBucket === '0-6h')!;
+    expect(short.n).toBe(2);
+    expect(short.leadHours).toBeCloseTo(1.5, 6); // mean(60, 120) minutes
+  });
+
+  it('separates equal lead_days that were issued at different hours', () => {
+    // Both are "lead 0" for the evening window, but one was a 2h nowcast and
+    // the other a 14h forecast — averaging them would hide the difference.
+    const stats = computeGroupStats([
+      pair({ leadDays: 0, leadMinutes: 2 * 60 }),
+      pair({ leadDays: 0, leadMinutes: 14 * 60 }),
+    ]);
+    expect(stats).toHaveLength(2);
+    expect(stats.map((s) => s.leadBucket)).toEqual(['0-6h', '12-24h']);
+  });
+
+  it('falls back to lead_days when the maturity is unknown', () => {
+    const stats = computeGroupStats([pair({ leadDays: 2, leadMinutes: null })]);
+    expect(stats[0]!.leadBucket).toBe('d2');
+    expect(stats[0]!.leadHours).toBeNull();
   });
 
   it('computes category agreement rate', () => {

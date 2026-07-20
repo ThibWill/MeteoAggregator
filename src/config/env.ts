@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { IANAZone } from 'luxon';
 import { z } from 'zod';
 
 /**
@@ -8,6 +9,13 @@ import { z } from 'zod';
  */
 const EnvSchema = z.object({
   DATABASE_URL: z.string().url().or(z.string().startsWith('postgresql://')),
+
+  // Calendar days and time-range windows are wall-clock in this zone, so
+  // "evening" means evening where the town is, not 19:00-24:00 UTC.
+  TIME_ZONE: z
+    .string()
+    .default('Europe/Paris')
+    .refine((z) => IANAZone.isValidZone(z), { message: 'must be a valid IANA time zone' }),
 
   METEOFRANCE_API_KEY: z.string().min(1).optional(),
   METEOFRANCE_BASE_URL: z

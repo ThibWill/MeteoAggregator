@@ -28,7 +28,8 @@ SELECT
   o."precip_level"     AS observed_precip_level,
   -- Appended last so CREATE OR REPLACE stays valid (it can only add columns at
   -- the end): lets reliability filter on the observation source (mf-climatologie).
-  o."source_id"        AS observed_source_id
+  o."source_id"        AS observed_source_id,
+  f."lead_minutes"
 FROM "weather_measurement" f
 LEFT JOIN "weather_measurement" o
   ON o."kind" = 'OBSERVATION'

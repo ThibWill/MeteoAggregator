@@ -157,7 +157,7 @@ tasks stay on demand under the `app` profile).
    each town centroid and reads the nearest pixel value.
 2. Native hourly **samples** (in canonical units — °C, %, mm, m/s, J/kg) are
    bucketed by `domain/aggregate.ts` into the 4 configurable intra-day
-   **time ranges** per UTC day. Precipitation (accumulated since run start) is
+   **time ranges** per *local* day (see Time zones). Precipitation (accumulated since run start) is
    **differenced** across each window; instantaneous fields are meaned/maxed.
 3. `domain/categorize.ts` derives a **weather category** (clear … stormy) and a
    **precip level** from tunable thresholds (`config/thresholds.ts`). The raw
@@ -178,6 +178,48 @@ WHERE town_id = (SELECT id FROM town WHERE name = 'Lyon')
   AND target_date = '2026-07-20'
 ORDER BY time_range_id, lead_days;
 ```
+
+## Time zones
+
+Days and time-range windows are wall-clock **local**, not UTC, so `morning` /
+`evening` mean what a resident would mean. Each town carries its own IANA zone
+in `town.timezone`, falling back to the `TIME_ZONE` env default when null — so
+towns in different countries can be tracked side by side. `start_minute` /
+`end_minute` on `time_range` are offsets from *local* midnight, resolved as wall
+clock, so windows keep their hours across the 23h/25h DST days.
+
+`target_date` and `run_date` stay stored as `YYYY-MM-DDT00:00:00Z` markers: they
+label a local calendar day, they are not instants.
+
+## Forecast maturity, and why the cron hour doesn't matter
+
+Two rules keep the data comparable whatever time the cron fires:
+
+1. **Only fully-covered windows are written.** A window the model run spans just
+   part of (the one straddling the run start, or the tail past the horizon) would
+   aggregate from a fraction of its hours — precipitation especially, since it
+   sums — so it is dropped instead. `PARTIAL` is then reserved for genuine data
+   holes; windows outside the run are counted separately as `windowsOutOfRun`.
+   The same completeness rule applies to observations, so a full forecast is
+   never scored against a partly-observed window.
+2. **`lead_minutes` records the true maturity** (window start − run reference
+   time). `lead_days` shifts with the cron hour: for a 22:00 run the evening
+   window is a ~2h forecast, for a 05:10 run it is a ~14h one, yet both are
+   `lead_days = 0`. Reliability groups by maturity buckets (`0-6h`, `6-12h`,
+   `12-24h`, `24-36h`, `36-48h`, `48h+`), so scores stay comparable even if you
+   move the schedule.
+
+Observations are never asked for today: the daily run backfills **J-1 …
+J-`OBS_LOOKBACK_DAYS`**, i.e. only days that have fully elapsed, so a 22:00 run
+reads sensor data for yesterday and before — never for the hours still to come.
+Today's observations are written by tomorrow's run. A day is treated as done
+only once **every** window has a row, so a day the archive published in pieces
+(or late) is retried on the following runs until it is complete.
+
+A given day is still forecast at every lead: today's windows were written by the
+two previous runs at `lead_days` 1 and 2. What an evening run cannot produce is a
+`lead_days = 0` row for windows that have already elapsed — that is not a gap,
+it is a forecast that never existed.
 
 ## Cron
 

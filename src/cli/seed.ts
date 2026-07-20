@@ -4,6 +4,7 @@ import { logger } from '../lib/logger.js';
 
 const log = logger.child({ cli: 'seed' });
 
+// Offsets in minutes from each town's *local* midnight.
 const TIME_RANGES = [
   { code: 'night', startMinute: 0, endMinute: 420, sortOrder: 0 },
   { code: 'morning', startMinute: 420, endMinute: 780, sortOrder: 1 },
@@ -12,10 +13,10 @@ const TIME_RANGES = [
 ];
 
 const TOWNS = [
-  { name: 'Lyon', country: 'FR', adminArea: null },
-  { name: 'Mulhouse', country: 'FR', adminArea: null },
-  { name: 'Paris', country: 'FR', adminArea: null },
-  { name: 'Plouha', country: 'FR', adminArea: null },
+  { name: 'Lyon', country: 'FR', adminArea: null, timezone: 'Europe/Paris' },
+  { name: 'Mulhouse', country: 'FR', adminArea: null, timezone: 'Europe/Paris' },
+  { name: 'Paris', country: 'FR', adminArea: null, timezone: 'Europe/Paris' },
+  { name: 'Plouha', country: 'FR', adminArea: null, timezone: 'Europe/Paris' },
 ];
 
 async function seedTimeRanges(): Promise<void> {
@@ -85,7 +86,9 @@ async function seedTowns(sourceIds: number[]): Promise<void> {
     const existing = await prisma.town.findFirst({
       where: { name: t.name, country: t.country, adminArea: t.adminArea },
     });
-    const town = existing ?? (await prisma.town.create({ data: t }));
+    const town = existing
+      ? await prisma.town.update({ where: { id: existing.id }, data: { timezone: t.timezone } })
+      : await prisma.town.create({ data: t });
 
     if (town.latitude === null || town.longitude === null) {
       try {

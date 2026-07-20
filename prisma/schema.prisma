@@ -84,7 +84,9 @@ model Town {
   bboxMaxLat Float?   @map("bbox_max_lat")
   /// PostGIS point (EPSG:4326); optional, for future spatial queries.
   geom       Unsupported("geometry(Point, 4326)")?
-  timezone   String   @default("UTC")
+  /// IANA zone (e.g. "Europe/Paris") defining this town's day and window
+  /// boundaries. Null falls back to the TIME_ZONE env default.
+  timezone   String?
   active     Boolean  @default(true)
   geocodedAt DateTime? @map("geocoded_at")
   createdAt  DateTime @default(now()) @map("created_at")
@@ -118,7 +120,7 @@ model TownSource {
   @@map("town_source")
 }
 
-/// Configurable intra-day windows (offsets in minutes from UTC midnight).
+/// Configurable intra-day windows (offsets in minutes from local midnight).
 model TimeRange {
   id          Int      @id @default(autoincrement())
   code        String?
@@ -170,6 +172,9 @@ model WeatherMeasurement {
   referenceTime DateTime?       @map("reference_time") @db.Timestamptz(3)
   runDate       DateTime?       @map("run_date") @db.Date
   leadDays      Int?            @map("lead_days")
+  /// True forecast maturity: window start − reference_time, in minutes. Unlike
+  /// lead_days it does not shift when the cron hour changes.
+  leadMinutes   Int?            @map("lead_minutes")
 
   precipitationMm Float? @map("precipitation_mm")
   cloudCoverPct   Float? @map("cloud_cover_pct")
@@ -194,5 +199,6 @@ model WeatherMeasurement {
   @@index([townId, targetDate, timeRangeId])
   @@index([sourceId, kind, targetDate])
   @@index([targetDate, leadDays])
+  @@index([targetDate, leadMinutes])
   @@map("weather_measurement")
 }

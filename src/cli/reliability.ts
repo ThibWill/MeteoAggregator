@@ -71,7 +71,8 @@ function printWindow(
   const header = [
     pad('town', 12),
     pad('range', 10),
-    pad('lead', 4),
+    pad('lead', 8),
+    pad('~h', 5),
     pad('n', 5),
     pad('cat%', 6),
     pad('prcp%', 6),
@@ -89,7 +90,8 @@ function printWindow(
       [
         pad(townMap.get(g.townId) ?? String(g.townId), 12),
         pad(rangeMap.get(g.timeRangeId) ?? String(g.timeRangeId), 10),
-        pad(g.leadDays === null ? '-' : String(g.leadDays), 4),
+        pad(g.leadBucket, 8),
+        pad(g.leadHours === null ? '-' : g.leadHours.toFixed(0), 5),
         pad(String(g.n), 5),
         pad(pct(g.catAgreePct), 6),
         pad(pct(g.precipAgreePct), 6),
