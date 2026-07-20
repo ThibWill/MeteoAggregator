@@ -43,7 +43,6 @@ async function seedSources(): Promise<{ aromeId: number; climId: number }> {
       maxHorizonDays: 2,
       resolution: '2.5km',
       active: true,
-      config: { product: 'MF-NWP-HIGHRES-AROME-0025-FRANCE' },
     },
     update: {},
   });
@@ -57,7 +56,6 @@ async function seedSources(): Promise<{ aromeId: number; climId: number }> {
       kind: 'OBSERVATION',
       maxHorizonDays: 0,
       active: false,
-      config: { note: 'placeholder until a real observation source is wired in' },
     },
     update: { active: false },
   });
@@ -70,7 +68,6 @@ async function seedSources(): Promise<{ aromeId: number; climId: number }> {
       kind: 'OBSERVATION',
       maxHorizonDays: 0,
       active: true,
-      config: { note: 'DPClim qualified hourly archive; station resolved per town' },
     },
     update: { active: true },
   });
