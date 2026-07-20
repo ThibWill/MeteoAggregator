@@ -87,7 +87,6 @@ export async function saveTownCoordinates(
   townId: number,
   lat: number,
   lon: number,
-  bbox?: { minLon: number; minLat: number; maxLon: number; maxLat: number },
 ): Promise<void> {
   await prisma.town.update({
     where: { id: townId },
@@ -95,14 +94,6 @@ export async function saveTownCoordinates(
       latitude: lat,
       longitude: lon,
       geocodedAt: new Date(),
-      ...(bbox
-        ? {
-            bboxMinLon: bbox.minLon,
-            bboxMinLat: bbox.minLat,
-            bboxMaxLon: bbox.maxLon,
-            bboxMaxLat: bbox.maxLat,
-          }
-        : {}),
     },
   });
   // geom is an Unsupported column; set it via raw SQL.

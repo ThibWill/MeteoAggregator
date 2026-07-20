@@ -19,7 +19,7 @@ async function main(): Promise<void> {
         log.warn('no result', { name: town.name });
         continue;
       }
-      await saveTownCoordinates(town.id, geo.latitude, geo.longitude, geo.bbox);
+      await saveTownCoordinates(town.id, geo.latitude, geo.longitude);
       log.info('geocoded', {
         name: town.name,
         lat: geo.latitude,
