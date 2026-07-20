@@ -70,6 +70,22 @@ services:
     volumes:
       - ./logs:/app/logs
 
+  # Map front end (Vite + React + Leaflet), built to static assets and served by
+  # nginx, which also proxies /api/* to the `api` service (see web/nginx.conf).
+  # Like `api`, it comes up with `docker compose up -d`. Open http://localhost:8080.
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: meteo-aggregator-web:local
+    container_name: meteo-web
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    networks:
+      - meteo-net
+
 volumes:
   meteo-pgdata:
 

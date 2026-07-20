@@ -120,8 +120,23 @@ curl -X POST localhost:3000/admin/jobs/daily-run -H 'content-type: application/j
 > you must. Job history is in-memory and lost on restart; the `report` table is
 > the durable record.
 
-In Docker, `docker compose up -d` now brings up **db + api** together (batch
-tasks stay on demand under the `app` profile).
+In Docker, `docker compose up -d` now brings up **db + api + web** together
+(batch tasks stay on demand under the `app` profile).
+
+## Web front end (map UI)
+
+A Vite + React + Leaflet map that reads the API and shows forecast vs. observed
+weather per town, by day and intra-day window. It lives in [`web/`](web/) and
+runs as the `web` compose service (nginx serving the built assets and proxying
+`/api/*` to the `api` service):
+
+```bash
+docker compose up -d          # db + api + web
+# open http://localhost:8080
+```
+
+For local development with hot reload, see [`web/README.md`](web/README.md)
+(`cd web && npm install && npm run dev`, on http://localhost:5173).
 
 ## Configuration (`.env`)
 

@@ -10,5 +10,6 @@ logs.txt
 .gitignore
 .claude
 doc
+web
 test
 **/*.md
