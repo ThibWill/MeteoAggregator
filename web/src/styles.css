@@ -1,0 +1,211 @@
+:root {
+  --wm-bg: #eef2f6;
+  --wm-text: #16202e;
+  --wm-panel: rgba(255, 255, 255, 0.74);
+  --wm-border: rgba(20, 30, 50, 0.08);
+  --wm-hover: rgba(20, 30, 50, 0.06);
+  --wm-tile: rgba(20, 30, 50, 0.045);
+  --wm-accent: #4ba3e8;
+}
+[data-theme='dark'] {
+  --wm-bg: #0c1320;
+  --wm-text: #eaf0f8;
+  --wm-panel: rgba(20, 27, 42, 0.72);
+  --wm-border: rgba(255, 255, 255, 0.1);
+  --wm-hover: rgba(255, 255, 255, 0.08);
+  --wm-tile: rgba(255, 255, 255, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: 'Figtree', system-ui, sans-serif;
+}
+a {
+  color: #4c93dd;
+  text-decoration: none;
+}
+a:hover {
+  color: #2d63c4;
+}
+
+.leaflet-container {
+  background: transparent;
+  font-family: 'Figtree', sans-serif;
+}
+.leaflet-control-attribution {
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+/* markers */
+.wm-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wm-aura {
+  position: absolute;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  filter: blur(2px);
+}
+.wm-aura.wm-pulse {
+  animation: wmpulse 3.6s ease-in-out infinite;
+}
+@keyframes wmpulse {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.09);
+  }
+}
+.wm-core {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 2px 6px rgba(20, 30, 50, 0.35);
+}
+.wm-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px rgba(30, 40, 60, 0.25);
+}
+.wm-label {
+  position: absolute;
+  top: calc(50% + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  pointer-events: none;
+}
+.wm-temp {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1;
+}
+.wm-name {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+@keyframes wmspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.wm-spin {
+  animation: wmspin 0.8s linear infinite;
+}
+
+/* shell */
+.wm-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--wm-bg);
+  color: var(--wm-text);
+  font-family: 'Figtree', sans-serif;
+}
+.wm-map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.wm-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  transition: background 0.6s ease;
+}
+.wm-panel {
+  background: var(--wm-panel);
+  border: 1px solid var(--wm-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 8px 30px rgba(20, 30, 50, 0.1);
+}
+.wm-topbar {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 18px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.wm-seg {
+  border: none;
+  cursor: pointer;
+  font-family: 'Figtree', sans-serif;
+  color: var(--wm-text);
+  background: transparent;
+}
+.wm-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.wm-icon-btn:hover {
+  background: var(--wm-hover);
+  opacity: 1;
+}
+.wm-tile {
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--wm-tile);
+}
+.wm-tile-k {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.5;
+  font-weight: 600;
+}
+.wm-tile-v {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 19px;
+  margin-top: 3px;
+}
+.wm-tile-u {
+  font-size: 11px;
+  opacity: 0.5;
+}
