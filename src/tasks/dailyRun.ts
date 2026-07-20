@@ -14,7 +14,15 @@ import { buildDefaultRegistry, type ConnectorRegistry } from '../connectors/regi
 import { ALL_PARAMS, type GeoPoint } from '../connectors/types.js';
 import { aggregate } from '../domain/aggregate.js';
 import { categorize } from '../domain/categorize.js';
-import { horizonDates, leadDays, utcDateKey, type TimeRangeDef } from '../domain/timeRanges.js';
+import {
+  dateMarker,
+  dayBounds,
+  horizonDates,
+  leadDays,
+  localDateKey,
+  resolveZone,
+  type TimeRangeDef,
+} from '../domain/timeRanges.js';
 import { geocodeTown } from '../geocoding/geocoder.js';
 import { logger } from '../lib/logger.js';
 import { writeObservationSamples } from './observations.js';
@@ -40,8 +48,6 @@ export interface DailyRunSummary {
 export async function dailyRun(opts: DailyRunOptions = {}): Promise<DailyRunSummary> {
   const now = opts.now ?? new Date();
   const registry = opts.registry ?? buildDefaultRegistry();
-  const runDateKey = utcDateKey(now);
-  const runDate = new Date(`${runDateKey}T00:00:00.000Z`);
   const obsSourceCode = opts.observationSourceCode ?? 'mf-climatologie';
   const obsLookbackDays = safeLookbackDays();
 
@@ -54,7 +60,7 @@ export async function dailyRun(opts: DailyRunOptions = {}): Promise<DailyRunSumm
   const obsSource = await prisma.source.findUnique({ where: { code: obsSourceCode } });
 
   const summary: DailyRunSummary = {
-    runDate: runDateKey,
+    runDate: localDateKey(now),
     towns: pairs.length,
     succeeded: 0,
     partial: 0,
@@ -62,6 +68,11 @@ export async function dailyRun(opts: DailyRunOptions = {}): Promise<DailyRunSumm
   };
 
   for (const pair of pairs) {
+    const zone = resolveZone(pair.town.timezone);
+    // Each town's run day is its own local day, so `lead_days` stays a whole
+    // number of that town's days.
+    const runDateKey = localDateKey(now, zone);
+    const runDate = dateMarker(runDateKey);
     const townLog = log.child({ town: pair.town.name, source: pair.sourceCode });
     const report = await prisma.report.upsert({
       where: {
@@ -87,15 +98,15 @@ export async function dailyRun(opts: DailyRunOptions = {}): Promise<DailyRunSumm
       const connector = registry.getForecast(pair.sourceCode);
       if (!connector) throw new Error(`no forecast connector for ${pair.sourceCode}`);
 
-      const samples = await connector.fetchForecast(point, { now, params: ALL_PARAMS });
+      const samples = await connector.fetchForecast(point, { now, params: ALL_PARAMS, zone });
       const referenceTime = connectorReference(samples) ?? now;
       let windowsSkipped = 0;
       const forecastRows: UpsertMeasurementInput[] = [];
 
-      for (const targetDateKey of horizonDates(now, pair.maxHorizonDays)) {
-        const targetDate = new Date(`${targetDateKey}T00:00:00.000Z`);
+      for (const targetDateKey of horizonDates(now, pair.maxHorizonDays, zone)) {
+        const targetDate = dateMarker(targetDateKey);
         for (const range of timeRanges) {
-          const agg = aggregate(samples, targetDateKey, range);
+          const agg = aggregate(samples, targetDateKey, range, zone);
           if (!agg) {
             windowsSkipped++;
             continue;
@@ -148,6 +159,7 @@ export async function dailyRun(opts: DailyRunOptions = {}): Promise<DailyRunSumm
             now,
             obsLookbackDays,
             timeRanges,
+            zone,
             townLog,
           );
         } catch (err) {
@@ -198,26 +210,35 @@ async function writeObservations(
   now: Date,
   lookbackDays: number,
   timeRanges: TimeRangeDef[],
+  zone: string,
   townLog: ReturnType<typeof logger.child>,
 ): Promise<void> {
   const obsConnector = registry.getObservation(obsSourceCode);
   if (!obsConnector) return;
 
   // J-1 .. J-lookbackDays (archive is not real time; J is incomplete).
-  const startOfToday = DateTime.fromJSDate(now, { zone: 'utc' }).startOf('day');
+  const startOfToday = DateTime.fromJSDate(now, { zone }).startOf('day');
   const wanted: string[] = [];
   for (let i = 1; i <= lookbackDays; i++) {
     wanted.push(startOfToday.minus({ days: i }).toISODate() as string);
   }
-  const from = new Date(`${wanted[wanted.length - 1]}T00:00:00.000Z`);
-  const to = new Date(`${wanted[0]}T00:00:00.000Z`);
-  const present = await existingObservationDates(obsSourceId, pair.townId, from, to);
+  const oldest = startOfToday.minus({ days: lookbackDays }).toISODate() as string;
+  const newest = startOfToday.minus({ days: 1 }).toISODate() as string;
+  const present = await existingObservationDates(
+    obsSourceId,
+    pair.townId,
+    dateMarker(oldest),
+    dateMarker(newest),
+  );
   const missing = wanted.filter((d) => !present.has(d));
   if (missing.length === 0) {
     townLog.debug('observations up to date', { lookbackDays });
     return;
   }
 
+  // Instants, not date markers: a local day starts before UTC midnight.
+  const from = dayBounds(oldest, zone).start;
+  const to = dayBounds(newest, zone).end;
   const samples = await obsConnector.fetchObservationsRange(point, from, to, {
     params: ALL_PARAMS,
     townId: pair.townId,
@@ -234,6 +255,7 @@ async function writeObservations(
     dayKeys: missing,
     samples,
     timeRanges,
+    zone,
   });
   townLog.info('observations written', { days: missing.length, rows: written });
 }

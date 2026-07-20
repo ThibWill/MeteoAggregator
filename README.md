@@ -91,7 +91,7 @@ npm run daily
    each town centroid and reads the nearest pixel value.
 2. Native hourly **samples** (in canonical units — °C, %, mm, m/s, J/kg) are
    bucketed by `domain/aggregate.ts` into the 4 configurable intra-day
-   **time ranges** per UTC day. Precipitation (accumulated since run start) is
+   **time ranges** per *local* day (see Time zones). Precipitation (accumulated since run start) is
    **differenced** across each window; instantaneous fields are meaned/maxed.
 3. `domain/categorize.ts` derives a **weather category** (clear … stormy) and a
    **precip level** from tunable thresholds (`config/thresholds.ts`). The raw
@@ -112,6 +112,18 @@ WHERE town_id = (SELECT id FROM town WHERE name = 'Lyon')
   AND target_date = '2026-07-20'
 ORDER BY time_range_id, lead_days;
 ```
+
+## Time zones
+
+Days and time-range windows are wall-clock **local**, not UTC, so `morning` /
+`evening` mean what a resident would mean. Each town carries its own IANA zone
+in `town.timezone`, falling back to the `TIME_ZONE` env default when null — so
+towns in different countries can be tracked side by side. `start_minute` /
+`end_minute` on `time_range` are offsets from *local* midnight, resolved as wall
+clock, so windows keep their hours across the 23h/25h DST days.
+
+`target_date` and `run_date` stay stored as `YYYY-MM-DDT00:00:00Z` markers: they
+label a local calendar day, they are not instants.
 
 ## Cron
 

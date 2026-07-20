@@ -57,6 +57,8 @@ export const ACCUMULATED_PARAMS: ReadonlySet<ParamKey> = new Set<ParamKey>();
 export interface FetchForecastOptions {
   now: Date;
   params: ParamKey[];
+  /** Town zone; sets the local-day horizon the connector fetches steps for. */
+  zone?: string;
 }
 
 export interface ForecastConnector {

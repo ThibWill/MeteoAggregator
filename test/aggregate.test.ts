@@ -64,7 +64,7 @@ describe('prepareSeries', () => {
 
 describe('aggregateWindow', () => {
   it('aggregates the morning window with correct methods', () => {
-    const agg = aggregate(samples, '2026-07-19', morning);
+    const agg = aggregate(samples, '2026-07-19', morning, 'UTC');
     expect(agg).not.toBeNull();
     expect(agg!.precipitationMm).toBeCloseTo(3.5); // sum(1.0, 2.0, 0.5)
     expect(agg!.cloudCoverPct).toBeCloseTo(60); // mean(80,40,60)
@@ -78,15 +78,23 @@ describe('aggregateWindow', () => {
   });
 
   it('returns null when no step falls in the window (beyond horizon)', () => {
-    const agg = aggregate(samples, '2026-07-25', morning);
+    const agg = aggregate(samples, '2026-07-25', morning, 'UTC');
     expect(agg).toBeNull();
+  });
+
+  it('windows follow the local zone, not UTC', () => {
+    // In Paris the morning window is 05:00-11:00Z, so the 12:00Z step drops out
+    // and 07:00/09:00Z remain.
+    const agg = aggregate(samples, '2026-07-19', morning, 'Europe/Paris');
+    expect(agg!.raw.stepCount).toBe(2);
+    expect(agg!.precipitationMm).toBeCloseTo(3.0); // sum(1.0, 2.0)
   });
 
   it('keeps precipitation null when the param was never present', () => {
     const noPrecip: ForecastSample[] = [
       s('2026-07-19T08:00:00Z', { temperature_c: 16, cloud_cover_pct: 30 }),
     ];
-    const agg = aggregate(noPrecip, '2026-07-19', morning);
+    const agg = aggregate(noPrecip, '2026-07-19', morning, 'UTC');
     expect(agg!.precipitationMm).toBeNull();
     expect(agg!.temperatureC).toBe(16);
   });

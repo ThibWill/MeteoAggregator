@@ -3,6 +3,7 @@ import { prisma, disconnect } from '../db/client.js';
 import { buildDefaultRegistry } from '../connectors/registry.js';
 import { ALL_PARAMS, type GeoPoint } from '../connectors/types.js';
 import { loadActiveTimeRanges } from '../db/repo.js';
+import { dayBounds, resolveZone } from '../domain/timeRanges.js';
 import { writeObservationSamples } from '../tasks/observations.js';
 import { logger } from '../lib/logger.js';
 
@@ -15,17 +16,17 @@ function argValue(name: string): string | undefined {
   return arg?.slice(name.length + 3);
 }
 
-/** Inclusive [from, to] UTC day range from --from/--to or --days (default 365). */
-function resolveRange(): { from: DateTime; to: DateTime } {
-  const startOfToday = DateTime.utc().startOf('day');
+/** Inclusive [from, to] local day range from --from/--to or --days (default 365). */
+function resolveRange(zone: string): { from: DateTime; to: DateTime } {
+  const startOfToday = DateTime.now().setZone(zone).startOf('day');
   const fromArg = argValue('from');
   const toArg = argValue('to');
   if (fromArg || toArg) {
     const to = toArg
-      ? DateTime.fromISO(toArg, { zone: 'utc' }).startOf('day')
+      ? DateTime.fromISO(toArg, { zone }).startOf('day')
       : startOfToday.minus({ days: 1 });
     const from = fromArg
-      ? DateTime.fromISO(fromArg, { zone: 'utc' }).startOf('day')
+      ? DateTime.fromISO(fromArg, { zone }).startOf('day')
       : to.minus({ days: 364 });
     return { from, to };
   }
@@ -45,13 +46,6 @@ function dayKeysBetween(from: DateTime, to: DateTime): string[] {
 
 async function main(): Promise<void> {
   const townName = argValue('town');
-  const { from, to } = resolveRange();
-  if (!from.isValid || !to.isValid || from > to) {
-    throw new Error(`invalid range: ${from.toISODate()} .. ${to.toISODate()}`);
-  }
-  const dayKeys = dayKeysBetween(from, to);
-  log.info('backfill range', { from: from.toISODate(), to: to.toISODate(), days: dayKeys.length });
-
   const registry = buildDefaultRegistry();
   const connector = registry.getObservation(OBS_SOURCE_CODE);
   if (!connector) throw new Error(`no observation connector for ${OBS_SOURCE_CODE}`);
@@ -68,8 +62,6 @@ async function main(): Promise<void> {
     ? pairs.filter((p) => p.town.name.toLowerCase() === townName.toLowerCase())
     : pairs;
 
-  const fromDate = from.toJSDate();
-  const toDate = to.toJSDate();
   for (const pair of targets) {
     const town = pair.town;
     if (town.latitude === null || town.longitude === null) {
@@ -78,6 +70,15 @@ async function main(): Promise<void> {
     }
     const point: GeoPoint = { lat: town.latitude, lon: town.longitude };
     const townLog = log.child({ town: town.name });
+    const zone = resolveZone(town.timezone);
+    const { from, to } = resolveRange(zone);
+    if (!from.isValid || !to.isValid || from > to) {
+      throw new Error(`invalid range: ${from.toISODate()} .. ${to.toISODate()}`);
+    }
+    const dayKeys = dayKeysBetween(from, to);
+    const fromDate = dayBounds(from.toISODate() as string, zone).start;
+    const toDate = dayBounds(to.toISODate() as string, zone).end;
+    townLog.info('backfill range', { zone, from: from.toISODate(), days: dayKeys.length });
     try {
       const samples = await connector.fetchObservationsRange(point, fromDate, toDate, {
         params: ALL_PARAMS,
@@ -95,6 +96,7 @@ async function main(): Promise<void> {
         dayKeys,
         samples,
         timeRanges,
+        zone,
       });
       townLog.info('backfilled', { samples: samples.length, rows: written });
     } catch (err) {
