@@ -27,6 +27,7 @@ export interface ActiveForecastPair {
     country: string;
     latitude: number | null;
     longitude: number | null;
+    timezone: string | null;
   };
 }
 
@@ -51,12 +52,13 @@ export async function loadActiveForecastPairs(): Promise<ActiveForecastPair[]> {
       country: p.town.country,
       latitude: p.town.latitude,
       longitude: p.town.longitude,
+      timezone: p.town.timezone,
     },
   }));
 }
 
 /**
- * UTC dates (`YYYY-MM-DD`) that already have OBSERVATION rows for a
+ * Local dates (`YYYY-MM-DD`) that already have OBSERVATION rows for a
  * (source, town), within `[from, to]` inclusive. Used to skip re-fetching days
  * we already backfilled.
  */

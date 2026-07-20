@@ -4,6 +4,7 @@ import { httpRequest } from '../../lib/http.js';
 import { makeRateLimiter, noopRateLimiter, type RateLimiter } from '../../lib/ratelimit.js';
 import { logger } from '../../lib/logger.js';
 import { kgm2ToMm, toCelsius, toPercent } from '../../domain/units.js';
+import { dayBounds, resolveZone } from '../../domain/timeRanges.js';
 import type {
   FetchForecastOptions,
   ForecastConnector,
@@ -191,9 +192,14 @@ export class AromeConnector implements ForecastConnector {
       params: Object.keys(run.coverages),
     });
 
-    const horizonEnd = DateTime.fromJSDate(opts.now, { zone: 'utc' })
+    // End of the last *local* target day, which for western zones runs past
+    // the equivalent UTC midnight.
+    const zone = resolveZone(opts.zone);
+    const lastDay = DateTime.fromJSDate(opts.now, { zone })
       .startOf('day')
-      .plus({ days: this.maxHorizonDays + 1 });
+      .plus({ days: this.maxHorizonDays })
+      .toISODate() as string;
+    const horizonEnd = DateTime.fromJSDate(dayBounds(lastDay, zone).end, { zone: 'utc' });
 
     // Collect (param, validTime, value) samples, then group by validTime.
     const byValidTime = new Map<number, ForecastSample>();

@@ -3,7 +3,7 @@ import {
   type ForecastSample,
   type ParamKey,
 } from '../connectors/types.js';
-import { isInRange, utcDateKey, type TimeRangeDef } from './timeRanges.js';
+import { appTimeZone, isInRange, utcDateKey, type TimeRangeDef } from './timeRanges.js';
 
 type AggMethod = 'accumulate' | 'mean' | 'max' | 'min';
 
@@ -106,37 +106,43 @@ function reduceValues(values: number[], method: AggMethod): number | null {
   }
 }
 
-function inWindow(points: Point[] | undefined, dateKey: string, range: TimeRangeDef): number[] {
+function inWindow(
+  points: Point[] | undefined,
+  dateKey: string,
+  range: TimeRangeDef,
+  zone: string,
+): number[] {
   if (!points) return [];
-  return points.filter((p) => isInRange(p.validTime, dateKey, range)).map((p) => p.value);
+  return points.filter((p) => isInRange(p.validTime, dateKey, range, zone)).map((p) => p.value);
 }
 
 /**
  * Aggregate the native-step series into one window value per param for a given
- * (UTC target date, time range). Returns null if no step falls in the window
+ * (local target date, time range). Returns null if no step falls in the window
  * (e.g. beyond the model horizon) so the orchestrator can skip writing a row.
  */
 export function aggregateWindow(
   prepared: PreparedSeries,
   targetDateKey: string,
   range: TimeRangeDef,
+  zone: string = appTimeZone(),
 ): AggregatedWindow | null {
-  const stepTimes = prepared.allTimes.filter((t) => isInRange(t, targetDateKey, range));
+  const stepTimes = prepared.allTimes.filter((t) => isInRange(t, targetDateKey, range, zone));
   if (stepTimes.length === 0) return null;
 
   // Precip is per-hour (PT1H) accumulation, so sum the in-window values.
   // (deltas would only be populated for a run-cumulative source; see ACCUMULATED_PARAMS.)
   const precipSeries = prepared.instant.precipitation_mm ?? prepared.deltas.precipitation_mm;
   const precipitationMm = precipSeries
-    ? reduceValues(inWindow(precipSeries, targetDateKey, range), 'accumulate')
+    ? reduceValues(inWindow(precipSeries, targetDateKey, range, zone), 'accumulate')
     : null;
 
-  const cloud = reduceValues(inWindow(prepared.instant.cloud_cover_pct, targetDateKey, range), 'mean');
-  const tempVals = inWindow(prepared.instant.temperature_c, targetDateKey, range);
+  const cloud = reduceValues(inWindow(prepared.instant.cloud_cover_pct, targetDateKey, range, zone), 'mean');
+  const tempVals = inWindow(prepared.instant.temperature_c, targetDateKey, range, zone);
   const temperatureC = reduceValues(tempVals, 'mean');
-  const windSpeedMs = reduceValues(inWindow(prepared.instant.wind_speed_ms, targetDateKey, range), 'mean');
-  const windGustMs = reduceValues(inWindow(prepared.instant.wind_gust_ms, targetDateKey, range), 'max');
-  const capeJkg = reduceValues(inWindow(prepared.instant.cape_jkg, targetDateKey, range), 'max');
+  const windSpeedMs = reduceValues(inWindow(prepared.instant.wind_speed_ms, targetDateKey, range, zone), 'mean');
+  const windGustMs = reduceValues(inWindow(prepared.instant.wind_gust_ms, targetDateKey, range, zone), 'max');
+  const capeJkg = reduceValues(inWindow(prepared.instant.cape_jkg, targetDateKey, range, zone), 'max');
 
   const raw: AggregatedWindow['raw'] = {
     stepCount: stepTimes.length,
@@ -171,7 +177,8 @@ export function aggregate(
   samples: ForecastSample[],
   targetDate: Date | string,
   range: TimeRangeDef,
+  zone: string = appTimeZone(),
 ): AggregatedWindow | null {
   const dateKey = typeof targetDate === 'string' ? targetDate : utcDateKey(targetDate);
-  return aggregateWindow(prepareSeries(samples), dateKey, range);
+  return aggregateWindow(prepareSeries(samples), dateKey, range, zone);
 }

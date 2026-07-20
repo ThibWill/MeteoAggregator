@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { DateTime } from 'luxon';
 import { prisma } from '../db/client.js';
+import { appTimeZone } from './timeRanges.js';
 
 /** Rolling windows the reliability report is computed over. */
 export const WINDOWS = [
@@ -218,7 +219,7 @@ export async function computeReliability(
   const all = await fetchPairs(filter, earliest);
 
   return WINDOWS.map((w) => {
-    const since = DateTime.fromJSDate(now, { zone: 'utc' })
+    const since = DateTime.fromJSDate(now, { zone: appTimeZone() })
       .startOf('day')
       .minus({ days: w.days })
       .toISODate() as string;
